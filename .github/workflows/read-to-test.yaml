@@ -78,6 +78,7 @@ jobs:
 
           APP_NAME=${{ steps.pr-details.outputs.app_name }}
           SHA=${{ steps.pr-details.outputs.head_sha }}
+          AUTHOR=${{ steps.pr-details.outputs.pr_author }}
 
           echo "🔧 App: $APP_NAME"
           echo "🔧 Commit SHA: $SHA"
@@ -96,7 +97,7 @@ jobs:
             NEW_RC_NUM=$((RC_NUM + 1))
           fi
 
-          NEW_TAG="0.0.0-terraform-${APP_NAME}-rc${NEW_RC_NUM}"
+          NEW_TAG="0.0.0-terraform-${APP_NAME}-${AUTHOR}-rc${NEW_RC_NUM}"
 
           # Check if tag already exists (local or remote)
           while git rev-parse "$NEW_TAG" >/dev/null 2>&1; do
