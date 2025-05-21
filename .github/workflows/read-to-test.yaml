@@ -131,7 +131,8 @@ jobs:
           CONTROL_REPO="shabbir-saifee-cmm/terraform-control"
           CONTROL_CLONE="terraform-control"
           AUTHOR=${{ steps.pr-details.outputs.pr_author }}
-          BRANCH_NAME="auto-update-${APP_NAME}-${AUTHOR}"  # stable branch
+          PR_NUMBER=${{ steps.pr-details.outputs.pr_number }}
+          BRANCH_NAME="auto-update-${APP_NAME}-${AUTHOR}-${PR_NUMBER}"  # stable branch
 
           gh repo clone $CONTROL_REPO $CONTROL_CLONE
           cd $CONTROL_CLONE
