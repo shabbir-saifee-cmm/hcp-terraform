@@ -141,7 +141,8 @@ jobs:
           fi
 
           # Update the version line with new tag
-          sed -i -E "s/version\\s*=\\s*\"[^\"]+\"/version = \"${NEW_TAG}\"/" $FILE_PATH
+          # sed -i -E "s/version\\s*=\\s*\"[^\"]+\"/version = \"${NEW_TAG}\"/" $FILE_PATH
+          sed -i -E "0,/^(\s*version)(\s*=\s*)\"[^\"]+\"/s//\1\2\"${NEW_TAG}\"/" $FILE_PATH
 
           git add $FILE_PATH
           git commit -m "Update ${APP_NAME} module to ${NEW_TAG}"
