@@ -137,6 +137,9 @@ jobs:
 
           git add $FILE_PATH
           git commit -m "Update ${APP_NAME} module to ${NEW_TAG}"
+
+          git remote set-url origin https://x-access-token:${GH_TOKEN}@github.com/${CONTROL_REPO}.git
+
           git push origin $BRANCH_NAME
 
           echo "📬 Creating PR..."
