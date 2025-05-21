@@ -6,7 +6,7 @@ on:
 
 jobs:
   process-ready-to-test:
-    if: ${{ github.event.issue.pull_request && contains(github.event.comment.body, 'ready-to-test') }}
+    if: ${{ github.event.issue.pull_request && contains(github.event.comment.body, 'ready-to-test-terraform') }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -14,9 +14,9 @@ jobs:
     steps:
       - name: Checkout terraform repo
         uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+        # with:
+        #   fetch-depth: 0
+        #   token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Get PR details
         id: pr-details
@@ -24,119 +24,144 @@ jobs:
         with:
           script: |
             const { owner, repo } = context.repo;
-            const prNumber = context.payload.issue.number;
+            const prNumber = context.payload.pull_request.number;
+
             const { data: pr } = await github.rest.pulls.get({
               owner,
               repo,
               pull_number: prNumber
             });
 
-            // Extract app name from branch name or PR title
-            // Adjust this logic based on your naming conventions
-            const appName = pr.head.ref.split('/').pop();
+            const files = await github.paginate(
+              github.rest.pulls.listFiles,
+              {
+                owner,
+                repo,
+                pull_number: prNumber,
+                per_page: 100,
+              }
+            );
+
+            const appNames = new Set();
+            for (const file of files) {
+              const match = file.filename.match(/^terraform\/([^/]+)\//);
+              if (match) {
+                appNames.add(match[1]);
+              }
+            }
+
+            const appNameList = Array.from(appNames);
+
+            if (appNameList.length === 0) {
+              core.setFailed("No app changes detected under terraform/. PR must modify terraform/<app>/...");
+            } else if (appNameList.length > 1) {
+              core.setFailed(`Multiple apps changed: ${appNameList.join(', ')}. Only one app change is allowed per PR.`);
+            }
+
+            const appName = appNameList[0];
 
             core.setOutput("head_branch", pr.head.ref);
             core.setOutput("head_sha", pr.head.sha);
             core.setOutput("pr_number", prNumber);
             core.setOutput("app_name", appName);
 
-      - name: Create new RC tag
-        id: create-tag
-        run: |
-          # Get latest tag for this app
-          LATEST_TAG=$(git describe --tags --abbrev=0 --match "0.0.0-rc*" 2>/dev/null || echo "0.0.0-rc0")
+      # - name: Create new RC tag
+      #   id: create-tag
+      #   run: |
+      #     # Get latest tag for this app
+      #     LATEST_TAG=$(git describe --tags --abbrev=0 --match "0.0.0-rc*" 2>/dev/null || echo "0.0.0-rc0")
 
-          # Extract RC number and increment
-          RC_NUM=$(echo $LATEST_TAG | sed -E 's/0.0.0-rc([0-9]+)/\1/')
-          NEW_RC_NUM=$((RC_NUM+1))
-          NEW_TAG="0.0.0-rc${NEW_RC_NUM}"
+      #     # Extract RC number and increment
+      #     RC_NUM=$(echo $LATEST_TAG | sed -E 's/0.0.0-rc([0-9]+)/\1/')
+      #     NEW_RC_NUM=$((RC_NUM+1))
+      #     NEW_TAG="0.0.0-rc${NEW_RC_NUM}"
 
-          # Create and push tag
-          git tag $NEW_TAG ${{ steps.pr-details.outputs.head_sha }}
-          git push origin $NEW_TAG
+      #     # Create and push tag
+      #     git tag $NEW_TAG ${{ steps.pr-details.outputs.head_sha }}
+      #     git push origin $NEW_TAG
 
-          echo "new_tag=$NEW_TAG" >> $GITHUB_OUTPUT
+      #     echo "new_tag=$NEW_TAG" >> $GITHUB_OUTPUT
 
-      - name: Checkout terraform control repo
-        uses: actions/checkout@v3
-        with:
-          repository: shabbir-saifee-cmm/terraform-control
-          path: tcr
-          token: ${{ secrets.PAT_TOKEN }}  # Need a PAT with repo scope
+      # - name: Checkout terraform control repo
+      #   uses: actions/checkout@v3
+      #   with:
+      #     repository: shabbir-saifee-cmm/terraform-control
+      #     path: tcr
+      #     token: ${{ secrets.PAT_TOKEN }}  # Need a PAT with repo scope
 
-      - name: Update or create control repo PR
-        id: update-tcr
-        uses: actions/github-script@v6
-        with:
-          github-token: ${{ secrets.PAT_TOKEN }}
-          script: |
-            const fs = require('fs');
-            const { execSync } = require('child_process');
-            const { owner, repo } = context.repo;
+      # - name: Update or create control repo PR
+      #   id: update-tcr
+      #   uses: actions/github-script@v6
+      #   with:
+      #     github-token: ${{ secrets.PAT_TOKEN }}
+      #     script: |
+      #       const fs = require('fs');
+      #       const { execSync } = require('child_process');
+      #       const { owner, repo } = context.repo;
 
-            const trPrNumber = context.payload.issue.number;
-            const appName = '${{ steps.pr-details.outputs.app_name }}';
-            const newTag = '${{ steps.create-tag.outputs.new_tag }}';
+      #       const trPrNumber = context.payload.issue.number;
+      #       const appName = '${{ steps.pr-details.outputs.app_name }}';
+      #       const newTag = '${{ steps.create-tag.outputs.new_tag }}';
 
-            // Update version in main.tf
-            const mainTfPath = `tcr/projects/${appName}/staging/main.tf`;
-            let mainTf = fs.readFileSync(mainTfPath, 'utf8');
-            mainTf = mainTf.replace(/(version\s*=\s*)"[^"]*"/, `$1"${newTag}"`);
-            fs.writeFileSync(mainTfPath, mainTf);
+      #       // Update version in main.tf
+      #       const mainTfPath = `tcr/projects/${appName}/staging/main.tf`;
+      #       let mainTf = fs.readFileSync(mainTfPath, 'utf8');
+      #       mainTf = mainTf.replace(/(version\s*=\s*)"[^"]*"/, `$1"${newTag}"`);
+      #       fs.writeFileSync(mainTfPath, mainTf);
 
-            // Create branch in TCR
-            const branchName = `update-${appName}-${newTag}`;
+      #       // Create branch in TCR
+      #       const branchName = `update-${appName}-${newTag}`;
 
-            try {
-              execSync(`cd tcr && git config user.name "GitHub Action"`);
-              execSync(`cd tcr && git config user.email "action@github.com"`);
-              execSync(`cd tcr && git checkout -b ${branchName}`);
-              execSync(`cd tcr && git add ${mainTfPath}`);
-              execSync(`cd tcr && git commit -m "Update ${appName} to version ${newTag}"`);
-              execSync(`cd tcr && git push origin ${branchName}`);
+      #       try {
+      #         execSync(`cd tcr && git config user.name "GitHub Action"`);
+      #         execSync(`cd tcr && git config user.email "action@github.com"`);
+      #         execSync(`cd tcr && git checkout -b ${branchName}`);
+      #         execSync(`cd tcr && git add ${mainTfPath}`);
+      #         execSync(`cd tcr && git commit -m "Update ${appName} to version ${newTag}"`);
+      #         execSync(`cd tcr && git push origin ${branchName}`);
 
-              // Check if PR already exists
-              const tcrOwner = 'owner'; // Replace with actual owner
-              const tcrRepo = 'terraform-control-repo'; // Replace with actual repo name
+      #         // Check if PR already exists
+      #         const tcrOwner = 'owner'; // Replace with actual owner
+      #         const tcrRepo = 'terraform-control-repo'; // Replace with actual repo name
 
-              const existingPRs = await github.rest.pulls.list({
-                owner: tcrOwner,
-                repo: tcrRepo,
-                head: `${tcrOwner}:${branchName}`,
-                state: 'open'
-              });
+      #         const existingPRs = await github.rest.pulls.list({
+      #           owner: tcrOwner,
+      #           repo: tcrRepo,
+      #           head: `${tcrOwner}:${branchName}`,
+      #           state: 'open'
+      #         });
 
-              let tcrPrNumber;
+      #         let tcrPrNumber;
 
-              if (existingPRs.data.length > 0) {
-                // Update existing PR
-                tcrPrNumber = existingPRs.data[0].number;
-                console.log(`Using existing PR #${tcrPrNumber}`);
-              } else {
-                // Create new PR
-                const newPR = await github.rest.pulls.create({
-                  owner: tcrOwner,
-                  repo: tcrRepo,
-                  title: `Update ${appName} to version ${newTag}`,
-                  body: `This PR updates the ${appName} module to version ${newTag}. Related to terraform repo PR #${trPrNumber}.`,
-                  head: branchName,
-                  base: 'main'
-                });
+      #         if (existingPRs.data.length > 0) {
+      #           // Update existing PR
+      #           tcrPrNumber = existingPRs.data[0].number;
+      #           console.log(`Using existing PR #${tcrPrNumber}`);
+      #         } else {
+      #           // Create new PR
+      #           const newPR = await github.rest.pulls.create({
+      #             owner: tcrOwner,
+      #             repo: tcrRepo,
+      #             title: `Update ${appName} to version ${newTag}`,
+      #             body: `This PR updates the ${appName} module to version ${newTag}. Related to terraform repo PR #${trPrNumber}.`,
+      #             head: branchName,
+      #             base: 'main'
+      #           });
 
-                tcrPrNumber = newPR.data.number;
-                console.log(`Created new PR #${tcrPrNumber}`);
-              }
+      #           tcrPrNumber = newPR.data.number;
+      #           console.log(`Created new PR #${tcrPrNumber}`);
+      #         }
 
-              // Add comment to original PR
-              await github.rest.issues.createComment({
-                owner,
-                repo,
-                issue_number: trPrNumber,
-                body: `✅ Created terraform control repo PR #${tcrPrNumber} with version ${newTag}`
-              });
+      #         // Add comment to original PR
+      #         await github.rest.issues.createComment({
+      #           owner,
+      #           repo,
+      #           issue_number: trPrNumber,
+      #           body: `✅ Created terraform control repo PR #${tcrPrNumber} with version ${newTag}`
+      #         });
 
-              core.setOutput("tcr_pr_number", tcrPrNumber);
-            } catch (error) {
-              console.log(`Error: ${error.message}`);
-              core.setFailed(error.message);
-            }
+      #         core.setOutput("tcr_pr_number", tcrPrNumber);
+      #       } catch (error) {
+      #         console.log(`Error: ${error.message}`);
+      #         core.setFailed(error.message);
+      #       }
