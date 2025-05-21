@@ -119,41 +119,44 @@ jobs:
 
           APP_NAME=${{ steps.pr-details.outputs.app_name }}
           NEW_TAG=${{ steps.create-tag.outputs.new_tag }}
-          CONTROL_REPO="shabbir-saifee-cmm/terraform-control"
-          CONTROL_CLONE="terraform-control"
-          BRANCH_NAME="update-${APP_NAME}-to-${NEW_TAG}"
+          ACTOR=${{ github.actor }}
 
-          echo "📥 Cloning terraform-control..."
+          CONTROL_REPO="your-org/terraform-control"
+          CONTROL_CLONE="terraform-control"
+          BRANCH_NAME="auto-update-${APP_NAME}-${ACTOR}"  # stable branch
+
           gh repo clone $CONTROL_REPO $CONTROL_CLONE
           cd $CONTROL_CLONE
 
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
 
-          git checkout -b $BRANCH_NAME
-
-          FILE_PATH="projects/${APP_NAME}/staging/main.tf"
-
-          echo "🔍 Looking for $FILE_PATH"
-          if [ ! -f "$FILE_PATH" ]; then
-            echo "❌ File not found: $FILE_PATH"
-            exit 1
+          # Check if remote branch exists, else create from main
+          if git ls-remote --heads origin $BRANCH_NAME | grep $BRANCH_NAME; then
+            git checkout $BRANCH_NAME
+            git pull origin $BRANCH_NAME
+          else
+            git checkout -b $BRANCH_NAME origin/main
           fi
 
-          # Update the version line with new tag
-          # sed -i -E "s/version\\s*=\\s*\"[^\"]+\"/version = \"${NEW_TAG}\"/" $FILE_PATH
+          # Update file
+          FILE_PATH="projects/${APP_NAME}/staging/main.tf"
           sed -i -E "0,/^(\s*version)(\s*=\s*)\"[^\"]+\"/s//\1\2\"${NEW_TAG}\"/" $FILE_PATH
 
           git add $FILE_PATH
-          git commit -m "Update ${APP_NAME} module to ${NEW_TAG}"
+          git commit -m "Update ${APP_NAME} module to ${NEW_TAG}" || echo "No changes to commit"
 
+          # Push branch
           git remote set-url origin https://x-access-token:${GH_TOKEN}@github.com/${CONTROL_REPO}.git
+          git push origin $BRANCH_NAME --force
 
-          git push origin $BRANCH_NAME
+          # Check if PR exists
+          EXISTING_PR=$(gh pr list --repo $CONTROL_REPO --head $BRANCH_NAME --json number --jq '.[0].number')
 
-          echo "📬 Creating PR..."
-          gh pr create \
-            --title "Update ${APP_NAME} module to ${NEW_TAG}" \
-            --body "This PR updates the ${APP_NAME} module to use tag \`${NEW_TAG}\` in staging." \
-            --base main \
-            --head $BRANCH_NAME
+          if [ -z "$EXISTING_PR" ]; then
+            gh pr create --title "Update ${APP_NAME} module to ${NEW_TAG}" \
+              --body "This PR updates the ${APP_NAME} module to use tag \`${NEW_TAG}\` in staging." \
+              --base main --head $BRANCH_NAME
+          else
+            echo "PR #$EXISTING_PR already exists, skipping PR creation"
+          fi
