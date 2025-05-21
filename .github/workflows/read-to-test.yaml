@@ -80,10 +80,10 @@ jobs:
           echo "🔧 App: $APP_NAME"
           echo "🔧 Commit SHA: $SHA"
 
-          # Fetch all tags
-          git fetch --tags
+          # Fetch tags from remote
+          git fetch --tags origin
 
-          # Get latest RC tag for this app (fallback to rc0 if none found)
+          # Get latest RC tag for this app (sorted by version)
           LATEST_TAG=$(git tag --list "0.0.0-terraform-${APP_NAME}-rc*" | sort -V | tail -n 1)
           echo "🔍 Latest tag: ${LATEST_TAG:-none}"
 
@@ -94,7 +94,15 @@ jobs:
             NEW_RC_NUM=$((RC_NUM + 1))
           fi
 
-          NEW_TAG="terraform-${APP_NAME}-0.0.0-rc${NEW_RC_NUM}"
+          NEW_TAG="0.0.0-terraform-${APP_NAME}-rc${NEW_RC_NUM}"
+
+          # Check if tag already exists (local or remote)
+          while git rev-parse "$NEW_TAG" >/dev/null 2>&1; do
+            echo "Tag $NEW_TAG already exists, incrementing RC number"
+            NEW_RC_NUM=$((NEW_RC_NUM + 1))
+            NEW_TAG="0.0.0-terraform-${APP_NAME}-rc${NEW_RC_NUM}"
+          done
+
           echo "🏷️ New tag: $NEW_TAG"
 
           # Create and push the tag
