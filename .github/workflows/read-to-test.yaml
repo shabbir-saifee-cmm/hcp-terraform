@@ -121,7 +121,7 @@ jobs:
           NEW_TAG=${{ steps.create-tag.outputs.new_tag }}
           ACTOR=${{ github.actor }}
 
-          CONTROL_REPO="your-org/terraform-control"
+          CONTROL_REPO="shabbir-safee-cmm/terraform-control"
           CONTROL_CLONE="terraform-control"
           BRANCH_NAME="auto-update-${APP_NAME}-${ACTOR}"  # stable branch
 
