@@ -61,11 +61,13 @@ jobs:
             }
 
             const appName = appNameList[0];
+            const prAuthor = pr.user.login;
 
             core.setOutput("head_branch", pr.head.ref);
             core.setOutput("head_sha", pr.head.sha);
             core.setOutput("pr_number", prNumber);
             core.setOutput("app_name", appName);
+            core.setOutput("pr_author", prAuthor);
 
             core.info(`✅ Final app_name: ${appName}`);
 
@@ -123,7 +125,8 @@ jobs:
 
           CONTROL_REPO="shabbir-saifee-cmm/terraform-control"
           CONTROL_CLONE="terraform-control"
-          BRANCH_NAME="auto-update-${APP_NAME}-${ACTOR}"  # stable branch
+          AUTHOR=${{ steps.pr-details.outputs.pr_author }}
+          BRANCH_NAME="auto-update-${APP_NAME}-${AUTHOR}"  # stable branch
 
           gh repo clone $CONTROL_REPO $CONTROL_CLONE
           cd $CONTROL_CLONE
