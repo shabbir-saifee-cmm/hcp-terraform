@@ -114,6 +114,10 @@ jobs:
 
           echo "new_tag=$NEW_TAG" >> $GITHUB_OUTPUT
 
+      - name: Check for the new in terraform
+        run: |
+          echo "check for the new version to exist in terraform registry"
+
       - name: Update version in terraform-control and open PR
         env:
           GH_TOKEN: ${{ secrets.TF_AUTOMATION_GITHUB_TOKEN }}
@@ -164,3 +168,18 @@ jobs:
           else
             echo "PR #$EXISTING_PR already exists, skipping PR creation"
           fi
+
+          PR_URL=$(gh pr list --repo $CONTROL_REPO --head $BRANCH_NAME --json url --jq '.[0].url')
+
+          if [ -z "$PR_URL" ]; then
+            COMMIT_SHA=$(git rev-parse HEAD)
+            PR_URL="https://github.com/${CONTROL_REPO}/commit/${COMMIT_SHA}"
+            MSG="🔄 Updated \`${APP_NAME}\` in [terraform-control](${PR_URL}) (commit only, no PR)."
+          else
+            MSG="📦 Opened/updated terraform-control PR for \`${APP_NAME}\`: ${PR_URL}"
+          fi
+
+          # Comment on the original PR
+          gh pr comment ${{ steps.pr-details.outputs.pr_number }} \
+            --repo ${{ github.repository }} \
+            --body "$MSG"
