@@ -103,86 +103,45 @@ jobs:
 
           echo "new_tag=$NEW_TAG" >> $GITHUB_OUTPUT
 
-      # - name: Checkout terraform control repo
-      #   uses: actions/checkout@v3
-      #   with:
-      #     repository: shabbir-saifee-cmm/terraform-control
-      #     path: tcr
-      #     token: ${{ secrets.PAT_TOKEN }}  # Need a PAT with repo scope
+      - name: Update version in terraform-control and open PR
+        env:
+          GH_TOKEN: ${{ secrets.TF_AUTOMATION_GITHUB_TOKEN }}
+        run: |
+          set -e
 
-      # - name: Update or create control repo PR
-      #   id: update-tcr
-      #   uses: actions/github-script@v6
-      #   with:
-      #     github-token: ${{ secrets.PAT_TOKEN }}
-      #     script: |
-      #       const fs = require('fs');
-      #       const { execSync } = require('child_process');
-      #       const { owner, repo } = context.repo;
+          APP_NAME=${{ steps.pr-details.outputs.app_name }}
+          NEW_TAG=${{ steps.create-tag.outputs.new_tag }}
+          CONTROL_REPO="shabbir-saifee-cmm/terraform-control"
+          CONTROL_CLONE="terraform-control"
+          BRANCH_NAME="update-${APP_NAME}-to-${NEW_TAG}"
 
-      #       const trPrNumber = context.payload.issue.number;
-      #       const appName = '${{ steps.pr-details.outputs.app_name }}';
-      #       const newTag = '${{ steps.create-tag.outputs.new_tag }}';
+          echo "📥 Cloning terraform-control..."
+          gh repo clone $CONTROL_REPO $CONTROL_CLONE
+          cd $CONTROL_CLONE
 
-      #       // Update version in main.tf
-      #       const mainTfPath = `tcr/projects/${appName}/staging/main.tf`;
-      #       let mainTf = fs.readFileSync(mainTfPath, 'utf8');
-      #       mainTf = mainTf.replace(/(version\s*=\s*)"[^"]*"/, `$1"${newTag}"`);
-      #       fs.writeFileSync(mainTfPath, mainTf);
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
 
-      #       // Create branch in TCR
-      #       const branchName = `update-${appName}-${newTag}`;
+          git checkout -b $BRANCH_NAME
 
-      #       try {
-      #         execSync(`cd tcr && git config user.name "GitHub Action"`);
-      #         execSync(`cd tcr && git config user.email "action@github.com"`);
-      #         execSync(`cd tcr && git checkout -b ${branchName}`);
-      #         execSync(`cd tcr && git add ${mainTfPath}`);
-      #         execSync(`cd tcr && git commit -m "Update ${appName} to version ${newTag}"`);
-      #         execSync(`cd tcr && git push origin ${branchName}`);
+          FILE_PATH="projects/${APP_NAME}/staging/main.tf"
 
-      #         // Check if PR already exists
-      #         const tcrOwner = 'owner'; // Replace with actual owner
-      #         const tcrRepo = 'terraform-control-repo'; // Replace with actual repo name
+          echo "🔍 Looking for $FILE_PATH"
+          if [ ! -f "$FILE_PATH" ]; then
+            echo "❌ File not found: $FILE_PATH"
+            exit 1
+          fi
 
-      #         const existingPRs = await github.rest.pulls.list({
-      #           owner: tcrOwner,
-      #           repo: tcrRepo,
-      #           head: `${tcrOwner}:${branchName}`,
-      #           state: 'open'
-      #         });
+          # Update the version line with new tag
+          sed -i -E "s/version\\s*=\\s*\"[^\"]+\"/version = \"${NEW_TAG}\"/" $FILE_PATH
 
-      #         let tcrPrNumber;
+          git add $FILE_PATH
+          git commit -m "Update ${APP_NAME} module to ${NEW_TAG}"
+          git push origin $BRANCH_NAME
 
-      #         if (existingPRs.data.length > 0) {
-      #           // Update existing PR
-      #           tcrPrNumber = existingPRs.data[0].number;
-      #           console.log(`Using existing PR #${tcrPrNumber}`);
-      #         } else {
-      #           // Create new PR
-      #           const newPR = await github.rest.pulls.create({
-      #             owner: tcrOwner,
-      #             repo: tcrRepo,
-      #             title: `Update ${appName} to version ${newTag}`,
-      #             body: `This PR updates the ${appName} module to version ${newTag}. Related to terraform repo PR #${trPrNumber}.`,
-      #             head: branchName,
-      #             base: 'main'
-      #           });
-
-      #           tcrPrNumber = newPR.data.number;
-      #           console.log(`Created new PR #${tcrPrNumber}`);
-      #         }
-
-      #         // Add comment to original PR
-      #         await github.rest.issues.createComment({
-      #           owner,
-      #           repo,
-      #           issue_number: trPrNumber,
-      #           body: `✅ Created terraform control repo PR #${tcrPrNumber} with version ${newTag}`
-      #         });
-
-      #         core.setOutput("tcr_pr_number", tcrPrNumber);
-      #       } catch (error) {
-      #         console.log(`Error: ${error.message}`);
-      #         core.setFailed(error.message);
-      #       }
+          echo "📬 Creating PR..."
+          gh pr create \
+            --title "Update ${APP_NAME} module to ${NEW_TAG}" \
+            --body "This PR updates the ${APP_NAME} module to use tag \`${NEW_TAG}\` in staging." \
+            --base main \
+            --head $BRANCH_NAME
