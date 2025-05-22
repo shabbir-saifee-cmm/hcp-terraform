@@ -168,7 +168,9 @@ jobs:
           sed -i -E "0,/^(\s*version)(\s*=\s*)\"[^\"]+\"/s//\1\2\"${NEW_TAG}\"/" $FILE_PATH
 
           git add $FILE_PATH
-          git commit -m "Update ${APP_NAME} module to ${NEW_TAG}" || echo "No changes to commit"
+
+          git commit -m "Update ${APP_NAME} module to ${NEW_TAG}
+          Co-authored-by: ${AUTHOR} <${AUTHOR}@users.noreply.github.com>" || echo "No changes to commit"
 
           # Push branch
           git remote set-url origin https://x-access-token:${GH_TOKEN}@github.com/${CONTROL_REPO}.git
@@ -178,9 +180,17 @@ jobs:
           EXISTING_PR=$(gh pr list --repo $CONTROL_REPO --head $BRANCH_NAME --json number --jq '.[0].number')
 
           if [ -z "$EXISTING_PR" ]; then
-            gh pr create --title "Update ${APP_NAME} module to ${NEW_TAG}" \
-              --body "This PR updates the ${APP_NAME} module to use tag \`${NEW_TAG}\` in \`${ENV}\`." \
-              --base main --head $BRANCH_NAME
+            # gh pr create --title "Update ${APP_NAME} module to ${NEW_TAG}" \
+            #   --body "This PR updates the ${APP_NAME} module to use tag \`${NEW_TAG}\` in \`${ENV}\`." \
+            #   --base main --head $BRANCH_NAME
+
+            gh pr create --title "Update ${APP_NAME} module to ${NEW_TAG} by @${AUTHOR}" \
+              --body "This PR updates the \`${APP_NAME}\` module to use tag \`${NEW_TAG}\` in \`${ENV}\`.
+            Triggered by: [@${AUTHOR}](https://github.com/${AUTHOR}) from PR #${PR_NUMBER} in [${{ github.repository }}](https://github.com/${{ github.repository }}/pull/${PR_NUMBER})" \
+              --base main --head $BRANCH_NAME \
+              --assignee $AUTHOR \
+              --reviewer $AUTHOR
+
           else
             echo "PR #$EXISTING_PR already exists, skipping PR creation"
           fi
