@@ -117,7 +117,7 @@ jobs:
           while git rev-parse "$NEW_TAG" >/dev/null 2>&1; do
             echo "Tag $NEW_TAG already exists, incrementing RC number"
             NEW_RC_NUM=$((NEW_RC_NUM + 1))
-            NEW_TAG="0.0.0-terraform-${APP_NAME}-rc${NEW_RC_NUM}"
+            NEW_TAG="0.0.0-terraform-${APP_NAME}-${AUTHOR}-rc${NEW_RC_NUM}"
           done
 
           echo "🏷️ New tag: $NEW_TAG"
