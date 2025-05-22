@@ -9,4 +9,7 @@ jobs:
     if: >
       github.event.issue.pull_request &&
       startsWith(github.event.comment.body, 'ready-to-test-terraform-')
+    permissions:
+      contents: write
+      pull-requests: write
     uses: shabbir-saifee-cmm/delivery-workflows/.github/workflows/terraform-release-candidate-tag.yaml@main
