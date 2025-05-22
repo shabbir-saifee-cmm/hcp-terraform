@@ -38,6 +38,9 @@ jobs:
 
   call-release-workflow:
     uses: shabbir-saifee-cmm/delivery-workflows/.github/workflows/terraform-release-candidate.yaml@main
+    permissions:
+      contents: write
+      pull-requests: write
     with:
       tagName: ${{ github.ref_name }}
       artifactConfig: |
