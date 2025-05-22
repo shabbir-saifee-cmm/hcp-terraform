@@ -1,0 +1,13 @@
+name: Test Tag Trigger
+
+on:
+  push:
+    tags:
+      - '*'  # Triggers on ANY tag
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print tag
+        run: echo "Tag created: ${{ github.ref_name }}"
