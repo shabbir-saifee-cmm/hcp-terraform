@@ -3,7 +3,7 @@ name: RC Tag Terraform Module Publisher
 on:
   create:
     tags:
-      - '0.0.0-terraform-*-*-rc*'  # Matches RC tags created by workflow 1
+      - '0.0.0-terraform-*'  # Matches RC tags created by workflow 1
 
 jobs:
   call-release-workflow:
@@ -16,5 +16,5 @@ jobs:
             moduleName: hcp-terraform
             modulePath: ./terraform/hcp-terraform
             moduleProvider: tfe
-    # secrets:
-    #   MCK_CMM_HCP_TERRAFORM_TOKEN: ${{ secrets.MCK_CMM_HCP_TERRAFORM_TOKEN }}
+    secrets:
+      MCK_CMM_HCP_TERRAFORM_TOKEN: 'test'
