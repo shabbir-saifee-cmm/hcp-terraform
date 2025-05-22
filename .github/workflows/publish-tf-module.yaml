@@ -45,6 +45,10 @@ jobs:
   call-release-workflow:
     needs: get-tag
     uses: shabbir-saifee-cmm/delivery-workflows/.github/workflows/terraform-release-candidate.yaml@main
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: write
     with:
       tagName: ${{ needs.get-tag.outputs.tag_name }}
       artifactConfig: |
