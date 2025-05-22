@@ -9,7 +9,7 @@ jobs:
   call-release-workflow:
     uses: shabbir-saifee-cmm/delivery-workflows/.github/workflows/terraform-release-candidate.yaml@main
     with:
-      releaseName: ${{ github.ref_name }}
+      tagName: ${{ github.ref_name }}
       artifactConfig: |
         terraform:
           hcp-terraform:
