@@ -1,61 +1,19 @@
-name: RC Tag Terraform Module Publisher
+name: Terraform release candidate automation
 
 on:
-  workflow_run:
-    workflows: ["Handle Ready-to-Test Comments"]  # Name of Workflow 1
-    types:
-      - completed
+  issue_comment:
+    types: [created]
 
 jobs:
-  get-tag:
-    if: github.event.workflow_run.conclusion == 'success'
-    runs-on: ubuntu-latest
-    outputs:
-      tag_name: ${{ steps.get-outputs.outputs.tag_name }}
-    steps:
-      - name: Get workflow outputs
-        id: get-outputs
-        uses: actions/github-script@v6
-        with:
-          script: |
-            // Get the workflow run that triggered this
-            const headSha = context.payload.workflow_run.head_sha;
-
-            // Get tags and find the one that matches this specific commit
-            const { data: tags } = await github.rest.repos.listTags({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              per_page: 20
-            });
-
-            const matchingTag = tags.find(tag =>
-              tag.commit.sha === headSha &&
-              tag.name.startsWith('0.0.0-terraform-') &&
-              tag.name.includes('-rc')
-            );
-
-            if (!matchingTag) {
-              core.setFailed(`No RC tag found for commit ${headSha}`);
-              return;
-            }
-
-            core.setOutput('tag_name', matchingTag.name);
-            core.info(`Found RC tag for this workflow: ${matchingTag.name}`);
-
-  call-release-workflow:
-    needs: get-tag
-    uses: shabbir-saifee-cmm/delivery-workflows/.github/workflows/terraform-release-candidate.yaml@main
+  terraform-rc-pipeline:
+    if: >
+      github.event.issue.pull_request &&
+      startsWith(github.event.comment.body, 'ready-to-test-terraform-')
     permissions:
       contents: write
       pull-requests: write
       actions: write
-    with:
-      tagName: ${{ needs.get-tag.outputs.tag_name }}
-      artifactConfig: |
-        terraform:
-          hcp-terraform:
-            moduleName: hcp-terraform
-            modulePath: ./terraform/hcp-terraform
-            moduleProvider: tfe
+    uses: shabbir-saifee-cmm/delivery-workflows/.github/workflows/terraform-rc-automation.yaml@main
     secrets:
-      MCK_CMM_HCP_TERRAFORM_TOKEN: ${{ secrets.MCK_CMM_HCP_TERRAFORM_TOKEN }}
+      TF_AUTOMATION_GITHUB_TOKEN: ${{ secrets.TF_AUTOMATION_GITHUB_TOKEN }}
+      # MCK_CMM_HCP_TERRAFORM_TOKEN: ${{ secrets.MCK_CMM_HCP_TERRAFORM_TOKEN }}
