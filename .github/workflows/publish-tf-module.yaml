@@ -36,7 +36,6 @@ jobs:
             core.setOutput('tag_name', rcTag.name);
             core.info(`Found RC tag: ${rcTag.name}`);
 
-jobs:
   call-release-workflow:
     uses: shabbir-saifee-cmm/delivery-workflows/.github/workflows/terraform-release-candidate.yaml@main
     with:
