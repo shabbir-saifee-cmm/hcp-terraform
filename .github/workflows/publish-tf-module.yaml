@@ -1,7 +1,7 @@
 name: RC Tag Terraform Module Publisher
 
 on:
-  create:
+  push:
     tags:
       - '0.0.0-terraform-*'  # Matches RC tags created by workflow 1
 
