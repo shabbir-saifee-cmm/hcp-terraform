@@ -13,3 +13,5 @@ jobs:
       contents: write
       pull-requests: write
     uses: shabbir-saifee-cmm/delivery-workflows/.github/workflows/terraform-release-candidate-tag.yaml@main
+    secrets:
+      PAT_TOKEN: ${{ secrets.TF_AUTOMATION_GITHUB_TOKEN }}
