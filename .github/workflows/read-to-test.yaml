@@ -186,7 +186,7 @@ jobs:
 
             gh pr create --title "Update ${APP_NAME} module to ${NEW_TAG} by @${AUTHOR}" \
               --body "This PR updates the \`${APP_NAME}\` module to use tag \`${NEW_TAG}\` in \`${ENV}\`.
-            Triggered by: [@${AUTHOR}](https://github.com/${AUTHOR}) from PR [${PR_NUMBER}](https://github.com/${{ github.repository }}/pull/${PR_NUMBER}) in [${{ github.repository }}](https://github.com/${{ github.repository }}" \
+            Triggered by: [@${AUTHOR}](https://github.com/${AUTHOR}) from PR [${PR_NUMBER}](https://github.com/${{ github.repository }}/pull/${PR_NUMBER}) in [${{ github.repository }}](https://github.com/${{ github.repository }})" \
               --base main --head $BRANCH_NAME \
               --assignee $AUTHOR \
               --reviewer $AUTHOR
