@@ -7,48 +7,58 @@ on:
       - completed
 
 jobs:
-  get-tag:
+  call-release-workflow:
     if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
-    outputs:
-      tag_name: ${{ steps.get-tag.outputs.tag_name }}
     steps:
-      - name: Get latest RC tag
-        id: get-tag
+      - name: Get workflow outputs
+        id: get-outputs
         uses: actions/github-script@v6
         with:
           script: |
-            // Get the latest RC tag created around the time of the workflow
+            // Get the workflow run that triggered this
+            const runId = context.payload.workflow_run.id;
+
+            // Get the outputs from that specific workflow run
+            const { data: jobs } = await github.rest.actions.listJobsForWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: runId
+            });
+
+            // Look for the outputs in the logs or use the workflow run's head_sha to find the right tag
+            const headSha = context.payload.workflow_run.head_sha;
+
+            // Get tags and find the one that matches this specific commit
             const { data: tags } = await github.rest.repos.listTags({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              per_page: 10
+              per_page: 20
             });
 
-            // Find the most recent RC tag
-            const rcTag = tags.find(tag => tag.name.startsWith('0.0.0-terraform-') && tag.name.includes('-rc'));
+            const matchingTag = tags.find(tag =>
+              tag.commit.sha === headSha &&
+              tag.name.startsWith('0.0.0-terraform-') &&
+              tag.name.includes('-rc')
+            );
 
-            if (!rcTag) {
-              core.setFailed('No RC tag found');
+            if (!matchingTag) {
+              core.setFailed(`No RC tag found for commit ${headSha}`);
               return;
             }
 
-            core.setOutput('tag_name', rcTag.name);
-            core.info(`Found RC tag: ${rcTag.name}`);
+            core.setOutput('tag_name', matchingTag.name);
+            core.info(`Found RC tag for this workflow: ${matchingTag.name}`);
 
-  call-release-workflow:
-    uses: shabbir-saifee-cmm/delivery-workflows/.github/workflows/terraform-release-candidate.yaml@main
-    permissions:
-      contents: write
-      pull-requests: write
-      actions: write
-    with:
-      tagName: ${{ github.ref_name }}
-      artifactConfig: |
-        terraform:
-          hcp-terraform:
-            moduleName: hcp-terraform
-            modulePath: ./terraform/hcp-terraform
-            moduleProvider: tfe
-    secrets:
-      MCK_CMM_HCP_TERRAFORM_TOKEN: 'test'
+      - name: Call release workflow
+        uses: shabbir-saifee-cmm/delivery-workflows/.github/workflows/terraform-release-candidate.yaml@main
+        with:
+          tagName: ${{ steps.get-outputs.outputs.tag_name }}
+          artifactConfig: |
+            terraform:
+              hcp-terraform:
+                moduleName: hcp-terraform
+                modulePath: ./terraform/hcp-terraform
+                moduleProvider: tfe
+        secrets:
+          MCK_CMM_HCP_TERRAFORM_TOKEN: 'test'
