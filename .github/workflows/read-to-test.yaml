@@ -1,211 +1,211 @@
-name: Ready to Test
+# name: Ready to Test
 
-on:
-  issue_comment:
-    types: [created]
+# on:
+#   issue_comment:
+#     types: [created]
 
-jobs:
-  process-ready-to-test:
-    if: >
-      github.event.issue.pull_request &&
-      startsWith(github.event.comment.body, 'ready-to-test-terraform-')
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: write
-    steps:
-      - name: Checkout terraform repo
-        uses: actions/checkout@v3
-        # with:
-        #   fetch-depth: 0
-        #   token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Dump GitHub event payload
-        run: cat $GITHUB_EVENT_PATH
+# jobs:
+#   process-ready-to-test:
+#     if: >
+#       github.event.issue.pull_request &&
+#       startsWith(github.event.comment.body, 'ready-to-test-terraform-')
+#     runs-on: ubuntu-latest
+#     permissions:
+#       contents: write
+#       pull-requests: write
+#     steps:
+#       - name: Checkout terraform repo
+#         uses: actions/checkout@v3
+#         # with:
+#         #   fetch-depth: 0
+#         #   token: ${{ secrets.GITHUB_TOKEN }}
+#       - name: Dump GitHub event payload
+#         run: cat $GITHUB_EVENT_PATH
 
-      - name: Get PR details
-        id: pr-details
-        uses: actions/github-script@v6
-        with:
-          script: |
-            const { owner, repo } = context.repo;
-            const prNumber = context.payload.issue.number;
-            const comment = context.payload.comment.body.trim();
+#       - name: Get PR details
+#         id: pr-details
+#         uses: actions/github-script@v6
+#         with:
+#           script: |
+#             const { owner, repo } = context.repo;
+#             const prNumber = context.payload.issue.number;
+#             const comment = context.payload.comment.body.trim();
 
-            const envMatch = comment.match(/^ready-to-test-terraform-(\w+)$/);
-            if (!envMatch) {
-              core.setFailed("Invalid comment format. Use: ready-to-test-terraform-<env>");
-              return;
-            }
+#             const envMatch = comment.match(/^ready-to-test-terraform-(\w+)$/);
+#             if (!envMatch) {
+#               core.setFailed("Invalid comment format. Use: ready-to-test-terraform-<env>");
+#               return;
+#             }
 
-            const environment = envMatch[1].toLowerCase();
+#             const environment = envMatch[1].toLowerCase();
 
-            if (["prod", "production"].includes(environment)) {
-              core.setFailed(`❌ Automation not allowed for environment: ${environment}`);
-              return;
-            }
+#             if (["prod", "production"].includes(environment)) {
+#               core.setFailed(`❌ Automation not allowed for environment: ${environment}`);
+#               return;
+#             }
 
-            const { data: pr } = await github.rest.pulls.get({
-              owner,
-              repo,
-              pull_number: prNumber
-            });
+#             const { data: pr } = await github.rest.pulls.get({
+#               owner,
+#               repo,
+#               pull_number: prNumber
+#             });
 
-            const files = await github.paginate(
-              github.rest.pulls.listFiles,
-              { owner, repo, pull_number: prNumber, per_page: 100 }
-            );
+#             const files = await github.paginate(
+#               github.rest.pulls.listFiles,
+#               { owner, repo, pull_number: prNumber, per_page: 100 }
+#             );
 
-            const appNames = new Set();
-            for (const file of files) {
-              const match = file.filename.match(/^terraform\/([^/]+)\//);
-              if (match) {
-                appNames.add(match[1]);
-              }
-            }
+#             const appNames = new Set();
+#             for (const file of files) {
+#               const match = file.filename.match(/^terraform\/([^/]+)\//);
+#               if (match) {
+#                 appNames.add(match[1]);
+#               }
+#             }
 
-            const appNameList = Array.from(appNames);
+#             const appNameList = Array.from(appNames);
 
-            if (appNameList.length === 0) {
-              core.setFailed("No app changes detected under terraform/. PR must modify terraform/<app>/...");
-              return;
-            } else if (appNameList.length > 1) {
-              core.setFailed(`Multiple apps changed: ${appNameList.join(', ')}. Only one app change is allowed per PR.`);
-              return;
-            }
+#             if (appNameList.length === 0) {
+#               core.setFailed("No app changes detected under terraform/. PR must modify terraform/<app>/...");
+#               return;
+#             } else if (appNameList.length > 1) {
+#               core.setFailed(`Multiple apps changed: ${appNameList.join(', ')}. Only one app change is allowed per PR.`);
+#               return;
+#             }
 
-            const appName = appNameList[0];
-            const prAuthor = pr.user.login;
+#             const appName = appNameList[0];
+#             const prAuthor = pr.user.login;
 
-            core.setOutput("head_branch", pr.head.ref);
-            core.setOutput("head_sha", pr.head.sha);
-            core.setOutput("pr_number", prNumber);
-            core.setOutput("app_name", appName);
-            core.setOutput("environment", environment);
-            core.setOutput("pr_author", prAuthor);
+#             core.setOutput("head_branch", pr.head.ref);
+#             core.setOutput("head_sha", pr.head.sha);
+#             core.setOutput("pr_number", prNumber);
+#             core.setOutput("app_name", appName);
+#             core.setOutput("environment", environment);
+#             core.setOutput("pr_author", prAuthor);
 
-            core.info(`✅ App: ${appName}, Env: ${environment}`);
+#             core.info(`✅ App: ${appName}, Env: ${environment}`);
 
-      - name: Create new RC tag for app
-        id: create-tag
-        run: |
-          set -e
+#       - name: Create new RC tag for app
+#         id: create-tag
+#         run: |
+#           set -e
 
-          APP_NAME=${{ steps.pr-details.outputs.app_name }}
-          SHA=${{ steps.pr-details.outputs.head_sha }}
-          AUTHOR=${{ steps.pr-details.outputs.pr_author }}
+#           APP_NAME=${{ steps.pr-details.outputs.app_name }}
+#           SHA=${{ steps.pr-details.outputs.head_sha }}
+#           AUTHOR=${{ steps.pr-details.outputs.pr_author }}
 
-          echo "🔧 App: $APP_NAME"
-          echo "🔧 Commit SHA: $SHA"
+#           echo "🔧 App: $APP_NAME"
+#           echo "🔧 Commit SHA: $SHA"
 
-          # Fetch tags from remote
-          git fetch --tags origin
+#           # Fetch tags from remote
+#           git fetch --tags origin
 
-          # Get latest RC tag for this app (sorted by version)
-          LATEST_TAG=$(git tag --list "0.0.0-terraform-${APP_NAME}-rc*" | sort -V | tail -n 1)
-          echo "🔍 Latest tag: ${LATEST_TAG:-none}"
+#           # Get latest RC tag for this app (sorted by version)
+#           LATEST_TAG=$(git tag --list "0.0.0-terraform-${APP_NAME}-rc*" | sort -V | tail -n 1)
+#           echo "🔍 Latest tag: ${LATEST_TAG:-none}"
 
-          if [[ -z "$LATEST_TAG" ]]; then
-            NEW_RC_NUM=1
-          else
-            RC_NUM=$(echo $LATEST_TAG | sed -E 's/.*-rc([0-9]+)$/\1/')
-            NEW_RC_NUM=$((RC_NUM + 1))
-          fi
+#           if [[ -z "$LATEST_TAG" ]]; then
+#             NEW_RC_NUM=1
+#           else
+#             RC_NUM=$(echo $LATEST_TAG | sed -E 's/.*-rc([0-9]+)$/\1/')
+#             NEW_RC_NUM=$((RC_NUM + 1))
+#           fi
 
-          NEW_TAG="0.0.0-terraform-${APP_NAME}-${AUTHOR}-rc${NEW_RC_NUM}"
+#           NEW_TAG="0.0.0-terraform-${APP_NAME}-${AUTHOR}-rc${NEW_RC_NUM}"
 
-          # Check if tag already exists (local or remote)
-          while git rev-parse "$NEW_TAG" >/dev/null 2>&1; do
-            echo "Tag $NEW_TAG already exists, incrementing RC number"
-            NEW_RC_NUM=$((NEW_RC_NUM + 1))
-            NEW_TAG="0.0.0-terraform-${APP_NAME}-${AUTHOR}-rc${NEW_RC_NUM}"
-          done
+#           # Check if tag already exists (local or remote)
+#           while git rev-parse "$NEW_TAG" >/dev/null 2>&1; do
+#             echo "Tag $NEW_TAG already exists, incrementing RC number"
+#             NEW_RC_NUM=$((NEW_RC_NUM + 1))
+#             NEW_TAG="0.0.0-terraform-${APP_NAME}-${AUTHOR}-rc${NEW_RC_NUM}"
+#           done
 
-          echo "🏷️ New tag: $NEW_TAG"
+#           echo "🏷️ New tag: $NEW_TAG"
 
-          # Create and push the tag
-          git tag $NEW_TAG $SHA
-          git push origin $NEW_TAG
+#           # Create and push the tag
+#           git tag $NEW_TAG $SHA
+#           git push origin $NEW_TAG
 
-          echo "new_tag=$NEW_TAG" >> $GITHUB_OUTPUT
+#           echo "new_tag=$NEW_TAG" >> $GITHUB_OUTPUT
 
-      - name: Check for the new in terraform
-        run: |
-          echo "check for the new version to exist in terraform registry"
+#       - name: Check for the new in terraform
+#         run: |
+#           echo "check for the new version to exist in terraform registry"
 
-      - name: Update version in terraform-control and open PR
-        env:
-          GH_TOKEN: ${{ secrets.TF_AUTOMATION_GITHUB_TOKEN }}
-        run: |
-          set -e
+#       - name: Update version in terraform-control and open PR
+#         env:
+#           GH_TOKEN: ${{ secrets.TF_AUTOMATION_GITHUB_TOKEN }}
+#         run: |
+#           set -e
 
-          APP_NAME=${{ steps.pr-details.outputs.app_name }}
-          NEW_TAG=${{ steps.create-tag.outputs.new_tag }}
-          ACTOR=${{ github.actor }}
+#           APP_NAME=${{ steps.pr-details.outputs.app_name }}
+#           NEW_TAG=${{ steps.create-tag.outputs.new_tag }}
+#           ACTOR=${{ github.actor }}
 
-          CONTROL_REPO="shabbir-saifee-cmm/terraform-control"
-          CONTROL_CLONE="terraform-control"
-          AUTHOR=${{ steps.pr-details.outputs.pr_author }}
-          PR_NUMBER=${{ steps.pr-details.outputs.pr_number }}
-          BRANCH_NAME="auto-update-${APP_NAME}-${AUTHOR}-${PR_NUMBER}"  # stable branch
-          ENV=${{ steps.pr-details.outputs.environment }}
+#           CONTROL_REPO="shabbir-saifee-cmm/terraform-control"
+#           CONTROL_CLONE="terraform-control"
+#           AUTHOR=${{ steps.pr-details.outputs.pr_author }}
+#           PR_NUMBER=${{ steps.pr-details.outputs.pr_number }}
+#           BRANCH_NAME="auto-update-${APP_NAME}-${AUTHOR}-${PR_NUMBER}"  # stable branch
+#           ENV=${{ steps.pr-details.outputs.environment }}
 
-          gh repo clone $CONTROL_REPO $CONTROL_CLONE
-          cd $CONTROL_CLONE
+#           gh repo clone $CONTROL_REPO $CONTROL_CLONE
+#           cd $CONTROL_CLONE
 
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
+#           git config user.name "github-actions"
+#           git config user.email "github-actions@github.com"
 
-          # Check if remote branch exists, else create from main
-          if git ls-remote --heads origin $BRANCH_NAME | grep $BRANCH_NAME; then
-            git checkout $BRANCH_NAME
-            git pull origin $BRANCH_NAME
-          else
-            git checkout -b $BRANCH_NAME origin/main
-          fi
+#           # Check if remote branch exists, else create from main
+#           if git ls-remote --heads origin $BRANCH_NAME | grep $BRANCH_NAME; then
+#             git checkout $BRANCH_NAME
+#             git pull origin $BRANCH_NAME
+#           else
+#             git checkout -b $BRANCH_NAME origin/main
+#           fi
 
-          # Update file
-          FILE_PATH="projects/${APP_NAME}/${ENV}/main.tf"
-          sed -i -E "0,/^(\s*version)(\s*=\s*)\"[^\"]+\"/s//\1\2\"${NEW_TAG}\"/" $FILE_PATH
+#           # Update file
+#           FILE_PATH="projects/${APP_NAME}/${ENV}/main.tf"
+#           sed -i -E "0,/^(\s*version)(\s*=\s*)\"[^\"]+\"/s//\1\2\"${NEW_TAG}\"/" $FILE_PATH
 
-          git add $FILE_PATH
+#           git add $FILE_PATH
 
-          git commit -m "Update ${APP_NAME} module to ${NEW_TAG}
-          Co-authored-by: ${AUTHOR} <${AUTHOR}@users.noreply.github.com>" || echo "No changes to commit"
+#           git commit -m "Update ${APP_NAME} module to ${NEW_TAG}
+#           Co-authored-by: ${AUTHOR} <${AUTHOR}@users.noreply.github.com>" || echo "No changes to commit"
 
-          # Push branch
-          git remote set-url origin https://x-access-token:${GH_TOKEN}@github.com/${CONTROL_REPO}.git
-          git push --force-with-lease origin $BRANCH_NAME
+#           # Push branch
+#           git remote set-url origin https://x-access-token:${GH_TOKEN}@github.com/${CONTROL_REPO}.git
+#           git push --force-with-lease origin $BRANCH_NAME
 
-          # Check if PR exists
-          EXISTING_PR=$(gh pr list --repo $CONTROL_REPO --head $BRANCH_NAME --json number --jq '.[0].number')
+#           # Check if PR exists
+#           EXISTING_PR=$(gh pr list --repo $CONTROL_REPO --head $BRANCH_NAME --json number --jq '.[0].number')
 
-          if [ -z "$EXISTING_PR" ]; then
-            # gh pr create --title "Update ${APP_NAME} module to ${NEW_TAG}" \
-            #   --body "This PR updates the ${APP_NAME} module to use tag \`${NEW_TAG}\` in \`${ENV}\`." \
-            #   --base main --head $BRANCH_NAME
+#           if [ -z "$EXISTING_PR" ]; then
+#             # gh pr create --title "Update ${APP_NAME} module to ${NEW_TAG}" \
+#             #   --body "This PR updates the ${APP_NAME} module to use tag \`${NEW_TAG}\` in \`${ENV}\`." \
+#             #   --base main --head $BRANCH_NAME
 
-            gh pr create --title "Update ${APP_NAME} module to ${NEW_TAG} by @${AUTHOR}" \
-              --body "This PR updates the \`${APP_NAME}\` module to use tag \`${NEW_TAG}\` in \`${ENV}\`.
-            Triggered by: [@${AUTHOR}](https://github.com/${AUTHOR}) from PR [${PR_NUMBER}](https://github.com/${{ github.repository }}/pull/${PR_NUMBER}) in [${{ github.repository }}](https://github.com/${{ github.repository }})" \
-              --base main --head $BRANCH_NAME \
-              --assignee $AUTHOR \
-              --reviewer $AUTHOR
+#             gh pr create --title "Update ${APP_NAME} module to ${NEW_TAG} by @${AUTHOR}" \
+#               --body "This PR updates the \`${APP_NAME}\` module to use tag \`${NEW_TAG}\` in \`${ENV}\`.
+#             Triggered by: [@${AUTHOR}](https://github.com/${AUTHOR}) from PR [${PR_NUMBER}](https://github.com/${{ github.repository }}/pull/${PR_NUMBER}) in [${{ github.repository }}](https://github.com/${{ github.repository }})" \
+#               --base main --head $BRANCH_NAME \
+#               --assignee $AUTHOR \
+#               --reviewer $AUTHOR
 
-          else
-            echo "PR #$EXISTING_PR already exists, skipping PR creation"
-          fi
+#           else
+#             echo "PR #$EXISTING_PR already exists, skipping PR creation"
+#           fi
 
-          PR_URL=$(gh pr list --repo $CONTROL_REPO --head $BRANCH_NAME --json url --jq '.[0].url')
+#           PR_URL=$(gh pr list --repo $CONTROL_REPO --head $BRANCH_NAME --json url --jq '.[0].url')
 
-          if [ -z "$PR_URL" ]; then
-            COMMIT_SHA=$(git rev-parse HEAD)
-            PR_URL="https://github.com/${CONTROL_REPO}/commit/${COMMIT_SHA}"
-            MSG="🔄 Updated \`${APP_NAME}\` in [terraform-control](${PR_URL}) (commit only, no PR)."
-          else
-            MSG="📦 Opened/updated terraform-control PR for \`${APP_NAME}\`: ${PR_URL}"
-          fi
+#           if [ -z "$PR_URL" ]; then
+#             COMMIT_SHA=$(git rev-parse HEAD)
+#             PR_URL="https://github.com/${CONTROL_REPO}/commit/${COMMIT_SHA}"
+#             MSG="🔄 Updated \`${APP_NAME}\` in [terraform-control](${PR_URL}) (commit only, no PR)."
+#           else
+#             MSG="📦 Opened/updated terraform-control PR for \`${APP_NAME}\`: ${PR_URL}"
+#           fi
 
-          # Comment on the original PR
-          gh pr comment ${{ steps.pr-details.outputs.pr_number }} \
-            --repo ${{ github.repository }} \
-            --body "$MSG"
+#           # Comment on the original PR
+#           gh pr comment ${{ steps.pr-details.outputs.pr_number }} \
+#             --repo ${{ github.repository }} \
+#             --body "$MSG"
