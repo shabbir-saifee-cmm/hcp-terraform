@@ -10,4 +10,5 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Print tag
-        run: echo "Tag created: ${{ github.ref_name }}"
+        run: |
+          echo "Tag created: ${{ github.ref_name }}"
