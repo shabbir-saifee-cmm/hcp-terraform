@@ -7,9 +7,11 @@ on:
       - completed
 
 jobs:
-  call-release-workflow:
+  get-tag:
     if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
+    outputs:
+      tag_name: ${{ steps.get-outputs.outputs.tag_name }}
     steps:
       - name: Get workflow outputs
         id: get-outputs
@@ -17,16 +19,6 @@ jobs:
         with:
           script: |
             // Get the workflow run that triggered this
-            const runId = context.payload.workflow_run.id;
-
-            // Get the outputs from that specific workflow run
-            const { data: jobs } = await github.rest.actions.listJobsForWorkflowRun({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              run_id: runId
-            });
-
-            // Look for the outputs in the logs or use the workflow run's head_sha to find the right tag
             const headSha = context.payload.workflow_run.head_sha;
 
             // Get tags and find the one that matches this specific commit
@@ -50,15 +42,16 @@ jobs:
             core.setOutput('tag_name', matchingTag.name);
             core.info(`Found RC tag for this workflow: ${matchingTag.name}`);
 
-      - name: Call release workflow
-        uses: shabbir-saifee-cmm/delivery-workflows/.github/workflows/terraform-release-candidate.yaml@main
-        with:
-          tagName: ${{ steps.get-outputs.outputs.tag_name }}
-          artifactConfig: |
-            terraform:
-              hcp-terraform:
-                moduleName: hcp-terraform
-                modulePath: ./terraform/hcp-terraform
-                moduleProvider: tfe
-        secrets:
-          MCK_CMM_HCP_TERRAFORM_TOKEN: 'test'
+  call-release-workflow:
+    needs: get-tag
+    uses: shabbir-saifee-cmm/delivery-workflows/.github/workflows/terraform-release-candidate.yaml@main
+    with:
+      tagName: ${{ needs.get-tag.outputs.tag_name }}
+      artifactConfig: |
+        terraform:
+          hcp-terraform:
+            moduleName: hcp-terraform
+            modulePath: ./terraform/hcp-terraform
+            moduleProvider: tfe
+    secrets:
+      MCK_CMM_HCP_TERRAFORM_TOKEN: ${{ secrets.MCK_CMM_HCP_TERRAFORM_TOKEN }}
