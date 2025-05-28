@@ -15,5 +15,6 @@ jobs:
       actions: write
     uses: shabbir-saifee-cmm/delivery-workflows/.github/workflows/terraform-rc-automation.yaml@main
     secrets:
-      TF_AUTOMATION_GITHUB_TOKEN: ${{ secrets.TF_AUTOMATION_GITHUB_TOKEN }}
+      TF_AUTOMATION_APP_SECRET: ${{ secrets.TF_AUTOMATION_APP_SECRET }}
+      TF_AUTOMATION_APP_ID: ${{ secrets.TF_AUTOMATION_APP_ID }}
       # MCK_CMM_HCP_TERRAFORM_TOKEN: ${{ secrets.MCK_CMM_HCP_TERRAFORM_TOKEN }}
