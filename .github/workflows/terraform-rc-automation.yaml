@@ -14,6 +14,8 @@ jobs:
       pull-requests: write
       actions: write
     uses: shabbir-saifee-cmm/delivery-workflows/.github/workflows/terraform-rc-automation.yaml@main
+    with:
+      artifactConfigPath: .artifact-config.yaml  # Path to config file
     secrets:
       TF_AUTOMATION_APP_SECRET: ${{ secrets.TF_AUTOMATION_APP_SECRET }}
       TF_AUTOMATION_APP_ID: ${{ secrets.TF_AUTOMATION_APP_ID }}
