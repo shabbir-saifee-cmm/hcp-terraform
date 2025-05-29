@@ -5,5 +5,5 @@ resource "tfe_team" "platform_admin" {
     read_projects   = true
     read_workspaces = true
   }
-  visibility = "organization"
+  visibility = "organization edit"
 }
