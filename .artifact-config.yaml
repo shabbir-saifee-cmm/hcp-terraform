@@ -2,6 +2,6 @@ terraform:
   hcp-terraform:
     moduleName: hcp-terraform
     modulePath: ./terraform/hcp-terraform
-  # my-cool-app:
-  #   moduleName: hcp-terraform
-  #   modulePath: ./terraform/hcp-terraform
+  other-module:
+    moduleName: other-module
+    modulePath: ./terraform/other-module
