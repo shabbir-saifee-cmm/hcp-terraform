@@ -1,0 +1,142 @@
+# .github/workflows/update-release-labels.yml
+name: Update Release Labels
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.artifact-config.yaml'
+  workflow_dispatch:
+
+jobs:
+  update-labels:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Generate release labels from config
+        id: generate
+        run: |
+          # Check if config file exists
+          if [ ! -f ".artifact-config.yaml" ]; then
+            echo "No .artifact-config.yaml found"
+            exit 0
+          fi
+
+          # Create labels array
+          labels=()
+          
+          # Get all artifact types and names
+          for artifact_type in image helm terraform; do
+            # Get all artifact names for this type
+            artifact_names=$(yq eval ".$artifact_type | keys | .[]?" .artifact-config.yaml 2>/dev/null || echo "")
+            
+            if [ -n "$artifact_names" ]; then
+              while IFS= read -r artifact_name; do
+                if [ -n "$artifact_name" ]; then
+                  # Create labels for each version bump type
+                  for version_type in patch minor major; do
+                    label="release:$artifact_type:$artifact_name:$version_type"
+                    labels+=("$label")
+                  done
+                fi
+              done <<< "$artifact_names"
+            fi
+          done
+
+          # Output labels for next step
+          printf '%s\n' "${labels[@]}" > labels.txt
+          echo "Generated $(wc -l < labels.txt) labels"
+          cat labels.txt
+
+      - name: Create/Update GitHub Labels
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ ! -f "labels.txt" ]; then
+            echo "No labels to create"
+            exit 0
+          fi
+
+          # Function to create or update label
+          create_or_update_label() {
+            local label_name="$1"
+            local description="$2"
+            local color="$3"
+            
+            # Check if label exists
+            if gh api repos/${{ github.repository }}/labels/"$label_name" >/dev/null 2>&1; then
+              echo "Updating existing label: $label_name"
+              gh api -X PATCH repos/${{ github.repository }}/labels/"$label_name" \
+                -f name="$label_name" \
+                -f description="$description" \
+                -f color="$color"
+            else
+              echo "Creating new label: $label_name"
+              gh api -X POST repos/${{ github.repository }}/labels \
+                -f name="$label_name" \
+                -f description="$description" \
+                -f color="$color"
+            fi
+          }
+
+          # Process each label
+          while IFS= read -r label; do
+            if [ -n "$label" ]; then
+              # Parse label components
+              IFS=':' read -r prefix artifact_type artifact_name version_type <<< "$label"
+              
+              # Set color based on version type
+              case "$version_type" in
+                "patch") color="e1f5fe" ;; # Light blue
+                "minor") color="f3e5f5" ;; # Light purple  
+                "major") color="ffebee" ;; # Light red
+                *) color="f5f5f5" ;;       # Light gray
+              esac
+              
+              # Create description
+              description="Auto-release $artifact_type/$artifact_name with $version_type version bump"
+              
+              create_or_update_label "$label" "$description" "$color"
+            fi
+          done < labels.txt
+
+      - name: Clean up old release labels
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Get all current release labels from GitHub
+          current_labels=$(gh api repos/${{ github.repository }}/labels --jq '.[] | select(.name | startswith("release:")) | .name')
+          
+          # Get labels that should exist from our config
+          expected_labels=""
+          if [ -f "labels.txt" ]; then
+            expected_labels=$(cat labels.txt)
+          fi
+          
+          # Find labels to delete (exist in GitHub but not in our config)
+          echo "$current_labels" | while IFS= read -r github_label; do
+            if [ -n "$github_label" ]; then
+              if ! echo "$expected_labels" | grep -Fxq "$github_label"; then
+                echo "Deleting obsolete label: $github_label"
+                gh api -X DELETE repos/${{ github.repository }}/labels/"$github_label" || echo "Failed to delete $github_label"
+              fi
+            fi
+          done
+
+      - name: Summary
+        run: |
+          echo "✅ Release labels updated successfully!"
+          echo ""
+          echo "Available release labels:"
+          if [ -f "labels.txt" ]; then
+            cat labels.txt | sort
+          fi
+          echo ""
+          echo "💡 Usage: Add these labels to PRs to trigger automatic releases on merge"
