@@ -56,8 +56,6 @@ jobs:
           cat labels.txt
 
       - name: Create/Update GitHub Labels
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if [ ! -f "labels.txt" ]; then
             echo "No labels to create"
@@ -108,8 +106,6 @@ jobs:
           done < labels.txt
 
       - name: Clean up old release labels
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # Get all current release labels from GitHub
           current_labels=$(gh api repos/${{ github.repository }}/labels --jq '.[] | select(.name | startswith("release:")) | .name')
