@@ -155,21 +155,21 @@ jobs:
               release_title="$artifact_type/$artifact_name v$new_version"
               release_body="## 🚀 $artifact_type Release: $artifact_name
 
-**Version:** \`$new_version\`
-**Artifact:** \`$artifact_type/$artifact_name\`
-
-### 📝 Changes
-Released from PR #$pr_number: $pr_title
-
-### 👤 Released by
-@$pr_author
-
-### 🔗 Links
-- [Pull Request]($pr_url)
-- [Tag](${{ github.server_url }}/${{ github.repository }}/releases/tag/$new_tag)
-
----
-*This release was automatically created from PR labels*"
+              **Version:** \`$new_version\`
+              **Artifact:** \`$artifact_type/$artifact_name\`
+              
+              ### 📝 Changes
+              Released from PR #$pr_number: $pr_title
+              
+              ### 👤 Released by
+              @$pr_author
+              
+              ### 🔗 Links
+              - [Pull Request]($pr_url)
+              - [Tag](${{ github.server_url }}/${{ github.repository }}/releases/tag/$new_tag)
+              
+              ---
+              *This release was automatically created from PR labels*"
 
               gh release create "$new_tag" \
                 --title "$release_title" \
