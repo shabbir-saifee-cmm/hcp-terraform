@@ -153,27 +153,41 @@ jobs:
               
               # Create GitHub release
               release_title="$artifact_type/$artifact_name v$new_version"
-              release_body="## 🚀 $artifact_type Release: $artifact_name
+              
+              # Create release notes
+              cat > release_notes.md << 'EOL'
+## 🚀 Release Notes
 
-              **Version:** \`$new_version\`
-              **Artifact:** \`$artifact_type/$artifact_name\`
-              
-              ### 📝 Changes
-              Released from PR #$pr_number: $pr_title
-              
-              ### 👤 Released by
-              @$pr_author
-              
-              ### 🔗 Links
-              - [Pull Request]($pr_url)
-              - [Tag](${{ github.server_url }}/${{ github.repository }}/releases/tag/$new_tag)
-              
-              ---
-              *This release was automatically created from PR labels*"
+**Artifact:** {ARTIFACT_TYPE}/{ARTIFACT_NAME}
+**Version:** `{NEW_VERSION}`
+
+### 📝 Changes
+Released from PR #{PR_NUMBER}: {PR_TITLE}
+
+### 👤 Released by
+@{PR_AUTHOR}
+
+### 🔗 Links
+- [Pull Request]({PR_URL})
+- [Repository](https://github.com/{REPO})
+
+---
+*This release was automatically created from PR labels*
+EOL
+
+              # Replace placeholders
+              sed -i "s/{ARTIFACT_TYPE}/$artifact_type/g" release_notes.md
+              sed -i "s/{ARTIFACT_NAME}/$artifact_name/g" release_notes.md
+              sed -i "s/{NEW_VERSION}/$new_version/g" release_notes.md
+              sed -i "s/{PR_NUMBER}/$pr_number/g" release_notes.md
+              sed -i "s/{PR_TITLE}/$pr_title/g" release_notes.md
+              sed -i "s/{PR_AUTHOR}/$pr_author/g" release_notes.md
+              sed -i "s#{PR_URL}#$pr_url#g" release_notes.md
+              sed -i "s/{REPO}/${{ github.repository }}/g" release_notes.md
 
               gh release create "$new_tag" \
                 --title "$release_title" \
-                --notes "$release_body" \
+                --notes-file release_notes.md \
                 --latest=false
               
               echo "✅ Created GitHub release: $release_title"
@@ -189,29 +203,28 @@ jobs:
           pr_number="${{ github.event.pull_request.number }}"
           
           # Create summary comment for the PR
-          comment_body="## 🚀 Auto-Release Summary
+          cat > comment.md << 'EOL'
+## 🚀 Auto-Release Summary
 
-          The following artifacts were automatically released from this PR:
+The following artifacts were automatically released from this PR:
+
+EOL
           
-          "
-                    
-                    # Add each released artifact to comment
-                    while IFS= read -r artifact_info; do
-                      if [ -n "$artifact_info" ]; then
-                        IFS=':' read -r artifact_type artifact_name new_version new_tag <<< "$artifact_info"
-                        comment_body="$comment_body
-          - 📦 **$artifact_type/$artifact_name** → [\`v$new_version\`](${{ github.server_url }}/${{ github.repository }}/releases/tag/$new_tag)"
-                      fi
-                    done <<< "${{ steps.process.outputs.artifacts_to_release }}"
-                    
-                    comment_body="$comment_body
+          # Add each released artifact to comment
+          while IFS= read -r artifact_info; do
+            if [ -n "$artifact_info" ]; then
+              IFS=':' read -r artifact_type artifact_name new_version new_tag <<< "$artifact_info"
+              echo "- 📦 **$artifact_type/$artifact_name** → [\`v$new_version\`](https://github.com/${{ github.repository }}/releases/tag/$new_tag)" >> comment.md
+            fi
+          done <<< "${{ steps.process.outputs.artifacts_to_release }}"
           
-          ---
-          *Releases were triggered by the \`release:*\` labels on this PR*"
+          echo "" >> comment.md
+          echo "---" >> comment.md
+          echo "*Releases were triggered by the \`release:*\` labels on this PR*" >> comment.md
 
           # Post comment to PR
           gh api repos/${{ github.repository }}/issues/$pr_number/comments \
-            -f body="$comment_body"
+            -f body="$(cat comment.md)"
 
       - name: No releases needed
         if: steps.labels.outputs.release_labels == ''
