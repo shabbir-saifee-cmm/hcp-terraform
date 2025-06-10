@@ -1,0 +1,220 @@
+# .github/workflows/auto-release.yml
+name: Auto Release from Labels
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+permissions:
+  contents: write  # For creating tags and releases
+  issues: write    # For posting comments to PRs
+  pull-requests: write  # For reading PR labels
+
+jobs:
+  auto-release:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.merged == true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get PR labels
+        id: labels
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          pr_number="${{ github.event.pull_request.number }}"
+          echo "Getting labels for PR #$pr_number"
+          
+          # Get all labels from the merged PR
+          labels=$(gh api repos/${{ github.repository }}/issues/$pr_number/labels --jq '.[].name')
+          
+          # Filter only release labels
+          release_labels=""
+          while IFS= read -r label; do
+            if [[ "$label" == release:* ]]; then
+              release_labels="$release_labels$label"$'\n'
+            fi
+          done <<< "$labels"
+          
+          # Remove trailing newline and output
+          release_labels=$(echo "$release_labels" | sed '/^$/d')
+          
+          if [ -n "$release_labels" ]; then
+            echo "Found release labels:"
+            echo "$release_labels"
+            echo "release_labels<<EOF" >> $GITHUB_OUTPUT
+            echo "$release_labels" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          else
+            echo "No release labels found"
+            echo "release_labels=" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Process release labels
+        id: process
+        if: steps.labels.outputs.release_labels != ''
+        run: |
+          # Create arrays to store release info
+          declare -a artifacts_to_release
+          
+          # Process each release label
+          while IFS= read -r label; do
+            if [ -n "$label" ]; then
+              echo "Processing label: $label"
+              
+              # Parse label: release:type:name:version_bump
+              IFS=':' read -r prefix artifact_type artifact_name version_bump <<< "$label"
+              
+              if [ "$prefix" = "release" ] && [ -n "$artifact_type" ] && [ -n "$artifact_name" ] && [ -n "$version_bump" ]; then
+                echo "  Type: $artifact_type"
+                echo "  Name: $artifact_name"
+                echo "  Version bump: $version_bump"
+                
+                # Get current version for this artifact
+                tag_prefix="${artifact_type}-${artifact_name}-v"
+                latest_tag=$(git tag -l "${tag_prefix}*" | sort -V | tail -1)
+                
+                if [ -n "$latest_tag" ]; then
+                  current_version=$(echo "$latest_tag" | sed "s/${tag_prefix}//")
+                  echo "  Current version: $current_version"
+                else
+                  current_version="0.0.0"
+                  echo "  No previous version found, starting from: $current_version"
+                fi
+                
+                # Calculate new version based on bump type
+                IFS='.' read -r major minor patch <<< "$current_version"
+                case "$version_bump" in
+                  "major")
+                    new_version="$((major + 1)).0.0"
+                    ;;
+                  "minor")
+                    new_version="${major}.$((minor + 1)).0"
+                    ;;
+                  "patch")
+                    new_version="${major}.${minor}.$((patch + 1))"
+                    ;;
+                  *)
+                    echo "  ❌ Invalid version bump: $version_bump"
+                    continue
+                    ;;
+                esac
+                
+                new_tag="${tag_prefix}${new_version}"
+                echo "  New version: $new_version"
+                echo "  New tag: $new_tag"
+                
+                # Store for release creation
+                artifacts_to_release+=("$artifact_type:$artifact_name:$new_version:$new_tag")
+                echo ""
+              else
+                echo "  ❌ Invalid label format: $label"
+              fi
+            fi
+          done <<< "${{ steps.labels.outputs.release_labels }}"
+          
+          # Output artifacts for next step
+          if [ ${#artifacts_to_release[@]} -gt 0 ]; then
+            echo "artifacts_to_release<<EOF" >> $GITHUB_OUTPUT
+            printf '%s\n' "${artifacts_to_release[@]}" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+            
+            echo "Summary: ${#artifacts_to_release[@]} artifacts will be released"
+          else
+            echo "artifacts_to_release=" >> $GITHUB_OUTPUT
+            echo "No valid artifacts to release"
+          fi
+
+      - name: Create releases
+        if: steps.process.outputs.artifacts_to_release != ''
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          pr_number="${{ github.event.pull_request.number }}"
+          pr_title="${{ github.event.pull_request.title }}"
+          pr_author="${{ github.event.pull_request.user.login }}"
+          pr_url="${{ github.event.pull_request.html_url }}"
+          
+          # Process each artifact to release
+          while IFS= read -r artifact_info; do
+            if [ -n "$artifact_info" ]; then
+              IFS=':' read -r artifact_type artifact_name new_version new_tag <<< "$artifact_info"
+              
+              echo "Creating release for: $artifact_type/$artifact_name v$new_version"
+              
+              # Create git tag
+              git tag "$new_tag"
+              git push origin "$new_tag"
+              echo "✅ Created tag: $new_tag"
+              
+              # Create GitHub release
+              release_title="$artifact_type/$artifact_name v$new_version"
+              release_body="## 🚀 $artifact_type Release: $artifact_name
+
+**Version:** \`$new_version\`
+**Artifact:** \`$artifact_type/$artifact_name\`
+
+### 📝 Changes
+Released from PR #$pr_number: $pr_title
+
+### 👤 Released by
+@$pr_author
+
+### 🔗 Links
+- [Pull Request]($pr_url)
+- [Tag](${{ github.server_url }}/${{ github.repository }}/releases/tag/$new_tag)
+
+---
+*This release was automatically created from PR labels*"
+
+              gh release create "$new_tag" \
+                --title "$release_title" \
+                --notes "$release_body" \
+                --latest=false
+              
+              echo "✅ Created GitHub release: $release_title"
+              echo ""
+            fi
+          done <<< "${{ steps.process.outputs.artifacts_to_release }}"
+
+      - name: Summary comment
+        if: steps.process.outputs.artifacts_to_release != ''
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          pr_number="${{ github.event.pull_request.number }}"
+          
+          # Create summary comment for the PR
+          comment_body="## 🚀 Auto-Release Summary
+
+The following artifacts were automatically released from this PR:
+
+"
+          
+          # Add each released artifact to comment
+          while IFS= read -r artifact_info; do
+            if [ -n "$artifact_info" ]; then
+              IFS=':' read -r artifact_type artifact_name new_version new_tag <<< "$artifact_info"
+              comment_body="$comment_body
+- 📦 **$artifact_type/$artifact_name** → [\`v$new_version\`](${{ github.server_url }}/${{ github.repository }}/releases/tag/$new_tag)"
+            fi
+          done <<< "${{ steps.process.outputs.artifacts_to_release }}"
+          
+          comment_body="$comment_body
+
+---
+*Releases were triggered by the \`release:*\` labels on this PR*"
+
+          # Post comment to PR
+          gh api repos/${{ github.repository }}/issues/$pr_number/comments \
+            -f body="$comment_body"
+
+      - name: No releases needed
+        if: steps.labels.outputs.release_labels == ''
+        run: |
+          echo "ℹ️  No release labels found on this PR"
+          echo "   Add labels like 'release:image:myapp:patch' to trigger automatic releases"
