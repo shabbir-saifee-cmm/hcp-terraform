@@ -28,10 +28,10 @@ jobs:
         run: |
           pr_number="${{ github.event.pull_request.number }}"
           echo "Getting labels for PR #$pr_number"
-          
+
           # Get all labels from the merged PR
           labels=$(gh api repos/${{ github.repository }}/issues/$pr_number/labels --jq '.[].name')
-          
+
           # Filter only release labels
           release_labels=""
           while IFS= read -r label; do
@@ -39,10 +39,10 @@ jobs:
               release_labels="$release_labels$label"$'\n'
             fi
           done <<< "$labels"
-          
+
           # Remove trailing newline and output
           release_labels=$(echo "$release_labels" | sed '/^$/d')
-          
+
           if [ -n "$release_labels" ]; then
             echo "Found release labels:"
             echo "$release_labels"
@@ -60,24 +60,24 @@ jobs:
         run: |
           # Create arrays to store release info
           declare -a artifacts_to_release
-          
+
           # Process each release label
           while IFS= read -r label; do
             if [ -n "$label" ]; then
               echo "Processing label: $label"
-              
+
               # Parse label: release:type:name:version_bump
               IFS=':' read -r prefix artifact_type artifact_name version_bump <<< "$label"
-              
+
               if [ "$prefix" = "release" ] && [ -n "$artifact_type" ] && [ -n "$artifact_name" ] && [ -n "$version_bump" ]; then
                 echo "  Type: $artifact_type"
                 echo "  Name: $artifact_name"
                 echo "  Version bump: $version_bump"
-                
+
                 # Get current version for this artifact
                 tag_prefix="${artifact_type}-${artifact_name}-v"
                 latest_tag=$(git tag -l "${tag_prefix}*" | sort -V | tail -1)
-                
+
                 if [ -n "$latest_tag" ]; then
                   current_version=$(echo "$latest_tag" | sed "s/${tag_prefix}//")
                   echo "  Current version: $current_version"
@@ -85,7 +85,7 @@ jobs:
                   current_version="0.0.0"
                   echo "  No previous version found, starting from: $current_version"
                 fi
-                
+
                 # Calculate new version based on bump type
                 IFS='.' read -r major minor patch <<< "$current_version"
                 case "$version_bump" in
@@ -103,11 +103,11 @@ jobs:
                     continue
                     ;;
                 esac
-                
+
                 new_tag="${tag_prefix}${new_version}"
                 echo "  New version: $new_version"
                 echo "  New tag: $new_tag"
-                
+
                 # Store for release creation
                 artifacts_to_release+=("$artifact_type:$artifact_name:$new_version:$new_tag")
                 echo ""
@@ -116,13 +116,13 @@ jobs:
               fi
             fi
           done <<< "${{ steps.labels.outputs.release_labels }}"
-          
+
           # Output artifacts for next step
           if [ ${#artifacts_to_release[@]} -gt 0 ]; then
             echo "artifacts_to_release<<EOF" >> $GITHUB_OUTPUT
             printf '%s\n' "${artifacts_to_release[@]}" >> $GITHUB_OUTPUT
             echo "EOF" >> $GITHUB_OUTPUT
-            
+
             echo "Summary: ${#artifacts_to_release[@]} artifacts will be released"
           else
             echo "artifacts_to_release=" >> $GITHUB_OUTPUT
@@ -138,39 +138,39 @@ jobs:
           pr_title="${{ github.event.pull_request.title }}"
           pr_author="${{ github.event.pull_request.user.login }}"
           pr_url="${{ github.event.pull_request.html_url }}"
-          
+
           # Process each artifact to release
           while IFS= read -r artifact_info; do
             if [ -n "$artifact_info" ]; then
               IFS=':' read -r artifact_type artifact_name new_version new_tag <<< "$artifact_info"
-              
+
               echo "Creating release for: $artifact_type/$artifact_name v$new_version"
-              
+
               # Create git tag
               git tag "$new_tag"
               git push origin "$new_tag"
               echo "✅ Created tag: $new_tag"
-              
+
               # Create GitHub release
               release_title="$artifact_type/$artifact_name v$new_version"
-              
+
               # Create release notes
               cat > release_notes.md << EOL
               ## 🚀 Release Notes
-              
+
               **Artifact:** {ARTIFACT_TYPE}/{ARTIFACT_NAME}
               **Version:** `{NEW_VERSION}`
-              
+
               ### 📝 Changes
               Released from PR #{PR_NUMBER}: {PR_TITLE}
-              
+
               ### 👤 Released by
               @{PR_AUTHOR}
-              
+
               ### 🔗 Links
               - [Pull Request]({PR_URL})
               - [Repository](https://github.com/{REPO})
-              
+
               ---
               *This release was automatically created from PR labels*
               EOL
@@ -189,7 +189,7 @@ jobs:
                 --title "$release_title" \
                 --notes-file release_notes.md \
                 --latest=false
-              
+
               echo "✅ Created GitHub release: $release_title"
               echo ""
             fi
@@ -201,15 +201,15 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
           pr_number="${{ github.event.pull_request.number }}"
-          
+
           # Create summary comment for the PR
-          cat > comment.md << EOL
+          cat > comment.md << 'EOL'
           ## 🚀 Auto-Release Summary
-          
+
           The following artifacts were automatically released from this PR:
-          
+
           EOL
-          
+
           # Add each released artifact to comment
           while IFS= read -r artifact_info; do
             if [ -n "$artifact_info" ]; then
@@ -217,7 +217,7 @@ jobs:
               echo "- 📦 **$artifact_type/$artifact_name** → [\`v$new_version\`](https://github.com/${{ github.repository }}/releases/tag/$new_tag)" >> comment.md
             fi
           done <<< "${{ steps.process.outputs.artifacts_to_release }}"
-          
+
           echo "" >> comment.md
           echo "---" >> comment.md
           echo "*Releases were triggered by the \`release:*\` labels on this PR*" >> comment.md
