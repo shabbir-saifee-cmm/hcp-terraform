@@ -154,36 +154,24 @@ jobs:
               # Create GitHub release
               release_title="$artifact_type/$artifact_name v$new_version"
 
-              # Create release notes
-              cat > release_notes.md << EOL
-              ## 🚀 Release Notes
-
-              **Artifact:** {ARTIFACT_TYPE}/{ARTIFACT_NAME}
-              **Version:** `{NEW_VERSION}`
-
-              ### 📝 Changes
-              Released from PR #{PR_NUMBER}: {PR_TITLE}
-
-              ### 👤 Released by
-              @{PR_AUTHOR}
-
-              ### 🔗 Links
-              - [Pull Request]({PR_URL})
-              - [Repository](https://github.com/{REPO})
-
-              ---
-              *This release was automatically created from PR labels*
-              EOL
-
-              # Replace placeholders
-              sed -i "s/{ARTIFACT_TYPE}/$artifact_type/g" release_notes.md
-              sed -i "s/{ARTIFACT_NAME}/$artifact_name/g" release_notes.md
-              sed -i "s/{NEW_VERSION}/$new_version/g" release_notes.md
-              sed -i "s/{PR_NUMBER}/$pr_number/g" release_notes.md
-              sed -i "s/{PR_TITLE}/$pr_title/g" release_notes.md
-              sed -i "s/{PR_AUTHOR}/$pr_author/g" release_notes.md
-              sed -i "s#{PR_URL}#$pr_url#g" release_notes.md
-              sed -i "s/{REPO}/${{ github.repository }}/g" release_notes.md
+              # Create release notes using echo
+              echo "## 🚀 Release Notes" > release_notes.md
+              echo "" >> release_notes.md
+              echo "**Artifact:** $artifact_type/$artifact_name" >> release_notes.md
+              echo "**Version:** \`$new_version\`" >> release_notes.md
+              echo "" >> release_notes.md
+              echo "### 📝 Changes" >> release_notes.md
+              echo "Released from PR #$pr_number: $pr_title" >> release_notes.md
+              echo "" >> release_notes.md
+              echo "### 👤 Released by" >> release_notes.md
+              echo "@$pr_author" >> release_notes.md
+              echo "" >> release_notes.md
+              echo "### 🔗 Links" >> release_notes.md
+              echo "- [Pull Request]($pr_url)" >> release_notes.md
+              echo "- [Repository](https://github.com/${{ github.repository }})" >> release_notes.md
+              echo "" >> release_notes.md
+              echo "---" >> release_notes.md
+              echo "*This release was automatically created from PR labels*" >> release_notes.md
 
               gh release create "$new_tag" \
                 --title "$release_title" \
@@ -202,13 +190,11 @@ jobs:
         run: |
           pr_number="${{ github.event.pull_request.number }}"
 
-          # Create summary comment for the PR
-          cat > comment.md << 'EOL'
-          ## 🚀 Auto-Release Summary
-
-          The following artifacts were automatically released from this PR:
-
-          EOL
+          # Create summary comment for the PR using echo
+          echo "## 🚀 Auto-Release Summary" > comment.md
+          echo "" >> comment.md
+          echo "The following artifacts were automatically released from this PR:" >> comment.md
+          echo "" >> comment.md
 
           # Add each released artifact to comment
           while IFS= read -r artifact_info; do
