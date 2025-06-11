@@ -155,7 +155,7 @@ jobs:
               release_title="$artifact_type/$artifact_name v$new_version"
               
               # Create release notes
-              cat > release_notes.md << 'EOL'
+              cat > release_notes.md << EOL
               ## 🚀 Release Notes
               
               **Artifact:** {ARTIFACT_TYPE}/{ARTIFACT_NAME}
@@ -203,7 +203,7 @@ jobs:
           pr_number="${{ github.event.pull_request.number }}"
           
           # Create summary comment for the PR
-          cat > comment.md << 'EOL'
+          cat > comment.md << EOL
           ## 🚀 Auto-Release Summary
           
           The following artifacts were automatically released from this PR:
