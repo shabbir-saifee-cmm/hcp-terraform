@@ -2,6 +2,3 @@ terraform:
   hcp-terraform:
     moduleName: hcp-terraform
     modulePath: ./terraform/hcp-terraform
-  other-module:
-    moduleName: other-module
-    modulePath: ./terraform/other-module
