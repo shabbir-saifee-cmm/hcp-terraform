@@ -74,7 +74,7 @@ jobs:
                 echo "  Name: $artifact_name"
                 echo "  Version bump: $version_bump"
 
-                # Get current version for this artifact
+                # Get current version for this artifact using new format
                 tag_prefix="release/${artifact_type}/${artifact_name}/"
                 latest_tag=$(git tag -l "${tag_prefix}*" | sort -V | tail -1)
 
@@ -144,22 +144,21 @@ jobs:
             if [ -n "$artifact_info" ]; then
               IFS=':' read -r artifact_type artifact_name new_version new_tag <<< "$artifact_info"
 
-              echo "Creating release for: $artifact_type/$artifact_name v$new_version"
+              echo "Creating release: $new_tag"
+              echo "Tag will be: $new_tag"
 
-              # Create git tag
+              # Create git tag with new format: release/type/name/version
               git tag "$new_tag"
               git push origin "$new_tag"
               echo "✅ Created tag: $new_tag"
 
-              # Create GitHub release
-              release_title="$artifact_type/$artifact_name v$new_version"
+              # Create GitHub release with same tag
+              release_title="$new_tag"
 
               # Create release notes using echo
               echo "## 🚀 Release Notes" > release_notes.md
               echo "" >> release_notes.md
-              echo "**Artifact:** $artifact_type/$artifact_name" >> release_notes.md
-              echo "**Version:** \`$new_version\`" >> release_notes.md
-              echo "**Tag:** \`$new_tag\`" >> release_notes.md
+              echo "**Release:** $new_tag" >> release_notes.md
               echo "" >> release_notes.md
               echo "### 📝 Changes" >> release_notes.md
               echo "Released from PR #$pr_number: $pr_title" >> release_notes.md
@@ -179,7 +178,7 @@ jobs:
                 --notes-file release_notes.md \
                 --latest=false
 
-              echo "✅ Created GitHub release: $release_title"
+              echo "✅ Created GitHub release: $new_tag"
               echo ""
             fi
           done <<< "${{ steps.process.outputs.artifacts_to_release }}"
@@ -201,7 +200,7 @@ jobs:
           while IFS= read -r artifact_info; do
             if [ -n "$artifact_info" ]; then
               IFS=':' read -r artifact_type artifact_name new_version new_tag <<< "$artifact_info"
-              echo "- 📦 **$artifact_type/$artifact_name** → [\`v$new_version\`](https://github.com/${{ github.repository }}/releases/tag/$new_tag)" >> comment.md
+              echo "- 📦 **$new_tag** → [Release](https://github.com/${{ github.repository }}/releases/tag/$new_tag)" >> comment.md
             fi
           done <<< "${{ steps.process.outputs.artifacts_to_release }}"
 
