@@ -75,11 +75,11 @@ jobs:
                 echo "  Version bump: $version_bump"
 
                 # Get current version for this artifact
-                tag_prefix="${artifact_type}-${artifact_name}-v"
+                tag_prefix="release/${artifact_type}/${artifact_name}/"
                 latest_tag=$(git tag -l "${tag_prefix}*" | sort -V | tail -1)
 
                 if [ -n "$latest_tag" ]; then
-                  current_version=$(echo "$latest_tag" | sed "s/${tag_prefix}//")
+                  current_version=$(echo "$latest_tag" | sed "s|${tag_prefix}||")
                   echo "  Current version: $current_version"
                 else
                   current_version="0.0.0"
@@ -159,6 +159,7 @@ jobs:
               echo "" >> release_notes.md
               echo "**Artifact:** $artifact_type/$artifact_name" >> release_notes.md
               echo "**Version:** \`$new_version\`" >> release_notes.md
+              echo "**Tag:** \`$new_tag\`" >> release_notes.md
               echo "" >> release_notes.md
               echo "### 📝 Changes" >> release_notes.md
               echo "Released from PR #$pr_number: $pr_title" >> release_notes.md
